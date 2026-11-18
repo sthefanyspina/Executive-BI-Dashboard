@@ -1,1037 +1,1577 @@
-
 import os
 import numpy as np
 import pandas as pd
 
 # ============================================================
-# 1. CONFIGURATION
+# 1. CONFIGURACOES GERAIS
 # ============================================================
 
 SEED = 42
-TOTAL_ROWS = 1_000_000
-OUTPUT_DIR = "synthetic_dataset"
-
 rng = np.random.default_rng(SEED)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Dimension sizes
-N_CUSTOMERS = 100_000
-N_PRODUCTS = 5_000
+COMPANY = "Vision Group"
 
-# Order assumptions
-START_DATE = pd.Timestamp("2010-01-01")
+OUTPUT_DIR = "vision_group_dataset"
+
+RAW_DIR = os.path.join(
+    OUTPUT_DIR,
+    "raw"
+)
+
+os.makedirs(RAW_DIR, exist_ok=True)
+
+# Quantidades da empresa
+
+N_CUSTOMERS = 82_400
+N_ORDERS = 145_200
+N_PRODUCTS = 500
+N_SELLERS = 120
+N_STORES = 35
+
+# Metas financeiras
+
+TARGET_REVENUE = 8_200_000.00
+TARGET_PROFIT = 2_100_000.00
+
+TARGET_COST = (
+    TARGET_REVENUE - TARGET_PROFIT
+)
+
+# Periodo historico
+
+START_DATE = pd.Timestamp("2021-01-01")
 END_DATE = pd.Timestamp("2025-12-31")
 
-AVG_ITEMS_PER_ORDER = 2
-
-# Return assumptions
-RETURN_RATE = 0.10
-
 # ============================================================
-# 2. REFERENCE DATA
+# 2. REGIOES BRASILEIRAS
 # ============================================================
 
-STATES = [
-    "California",
-    "Texas",
-    "Florida",
-    "New York",
-    "Illinois",
-    "Pennsylvania",
-    "Ohio",
-    "Georgia",
-    "North Carolina",
-    "Michigan",
-    "New Jersey",
-    "Virginia",
-    "Washington",
-    "Arizona",
-    "Massachusetts"
-]
-
-# Commercial regions
 STATE_REGION = {
-    "California": "West",
-    "Texas": "South",
-    "Florida": "South",
-    "New York": "Northeast",
-    "Illinois": "Midwest",
-    "Pennsylvania": "Northeast",
-    "Ohio": "Midwest",
-    "Georgia": "South",
-    "North Carolina": "South",
-    "Michigan": "Midwest",
-    "New Jersey": "Northeast",
-    "Virginia": "South",
-    "Washington": "West",
-    "Arizona": "West",
-    "Massachusetts": "Northeast"
+
+    "AC": "Norte",
+    "AP": "Norte",
+    "AM": "Norte",
+    "PA": "Norte",
+    "RO": "Norte",
+    "RR": "Norte",
+    "TO": "Norte",
+
+    "AL": "Nordeste",
+    "BA": "Nordeste",
+    "CE": "Nordeste",
+    "MA": "Nordeste",
+    "PB": "Nordeste",
+    "PE": "Nordeste",
+    "PI": "Nordeste",
+    "RN": "Nordeste",
+    "SE": "Nordeste",
+
+    "DF": "Centro-Oeste",
+    "GO": "Centro-Oeste",
+    "MT": "Centro-Oeste",
+    "MS": "Centro-Oeste",
+
+    "ES": "Sudeste",
+    "MG": "Sudeste",
+    "RJ": "Sudeste",
+    "SP": "Sudeste",
+
+    "PR": "Sul",
+    "RS": "Sul",
+    "SC": "Sul"
 }
 
-geolocation = pd.DataFrame({
-    "state": list(STATE_REGION.keys()),
-    "region": list(STATE_REGION.values())
+STATES = list(STATE_REGION.keys())
+
+# ============================================================
+# 3. DIM_REGIONS
+# ============================================================
+
+regions = pd.DataFrame({
+
+    "region_id": range(1, 6),
+
+    "region_name": [
+        "Norte",
+        "Nordeste",
+        "Centro-Oeste",
+        "Sudeste",
+        "Sul"
+    ]
+
 })
 
-# Product categories
-categories = {
-    "Electronics": [
-        "Smartphones",
-        "Laptops",
-        "Headphones",
-        "Accessories",
-        "Cameras"
-    ],
-    "Home": [
-        "Furniture",
-        "Kitchenware",
-        "Decor",
-        "Bedding",
-        "Storage"
-    ],
-    "Fashion": [
-        "Clothing",
-        "Shoes",
-        "Bags",
-        "Watches",
-        "Accessories"
-    ],
-    "Sports": [
-        "Fitness",
-        "Outdoor",
-        "Cycling",
-        "Team Sports",
-        "Camping"
-    ],
-    "Beauty": [
-        "Skincare",
-        "Haircare",
-        "Makeup",
-        "Fragrances",
-        "Personal Care"
-    ],
-    "Books": [
-        "Fiction",
-        "Business",
-        "Technology",
-        "Education",
-        "Children"
-    ]
-}
-
-CUSTOMER_SEGMENTS = [
-    "New",
-    "Regular",
-    "Loyal",
-    "VIP"
-]
-
-ACQUISITION_CHANNELS = [
-    "Organic Search",
-    "Paid Search",
-    "Social Media",
-    "Email Marketing",
-    "Referral",
-    "Direct"
-]
-
-SALES_CHANNELS = [
-    "Website",
-    "Mobile App",
-    "Marketplace",
-    "Store"
-]
-
-ORDER_STATUSES = [
-    "Delivered",
-    "Shipped",
-    "Processing",
-    "Canceled"
-]
-
-RETURN_REASONS = [
-    "Damaged Product",
-    "Wrong Product",
-    "Customer Dissatisfaction",
-    "Late Delivery",
-    "Product Defect"
-]
-
 # ============================================================
-# 3. DIMENSION TABLE: CUSTOMERS
+# 4. DIM_CUSTOMERS
 # ============================================================
 
-customer_ids = np.arange(1, N_CUSTOMERS + 1)
+customer_ids = np.arange(
+    1,
+    N_CUSTOMERS + 1
+)
 
-customer_signup_dates = (
-    pd.Timestamp("2008-01-01")
-    + pd.to_timedelta(
+# Cadastro anterior ao inicio do historico
+signup_dates = (
+    START_DATE
+    - pd.to_timedelta(
         rng.integers(
             0,
-            (END_DATE - pd.Timestamp("2008-01-01")).days + 1,
-            size=N_CUSTOMERS
+            365 * 4,
+            N_CUSTOMERS
         ),
         unit="D"
     )
 )
 
 customers = pd.DataFrame({
+
     "customer_id": customer_ids,
 
-    "customer_unique_id": [
-        f"CUST-{i:07d}"
+    "customer_code": [
+        f"VG-CUST-{i:07d}"
+        for i in customer_ids
+    ],
+
+    "customer_name": [
+        f"Cliente Vision {i:07d}"
         for i in customer_ids
     ],
 
     "state": rng.choice(
         STATES,
-        size=N_CUSTOMERS
+        N_CUSTOMERS
     ),
 
-    "signup_date": customer_signup_dates,
+    "city": rng.choice(
+        [
+            "Sao Paulo",
+            "Rio de Janeiro",
+            "Belo Horizonte",
+            "Curitiba",
+            "Salvador",
+            "Recife",
+            "Fortaleza",
+            "Brasilia",
+            "Goiania",
+            "Porto Alegre",
+            "Manaus",
+            "Belem",
+            "Florianopolis",
+            "Natal",
+            "Campinas"
+        ],
+        N_CUSTOMERS
+    ),
+
+    "signup_date": signup_dates,
 
     "customer_segment": rng.choice(
-        CUSTOMER_SEGMENTS,
-        size=N_CUSTOMERS,
+        [
+            "Novo",
+            "Regular",
+            "Fiel",
+            "VIP"
+        ],
+        N_CUSTOMERS,
         p=[0.30, 0.40, 0.22, 0.08]
     ),
 
     "acquisition_channel": rng.choice(
-        ACQUISITION_CHANNELS,
-        size=N_CUSTOMERS,
+        [
+            "Organico",
+            "Midia Paga",
+            "Redes Sociais",
+            "Email Marketing",
+            "Indicacao",
+            "Direto"
+        ],
+        N_CUSTOMERS,
         p=[0.25, 0.20, 0.18, 0.12, 0.10, 0.15]
     )
+
+})
+
+customers["region"] = (
+    customers["state"].map(STATE_REGION)
+)
+
+customers["region_id"] = (
+    customers["region"].map({
+        "Norte": 1,
+        "Nordeste": 2,
+        "Centro-Oeste": 3,
+        "Sudeste": 4,
+        "Sul": 5
+    })
+)
+
+# ============================================================
+# 5. DIM_CATEGORIES
+# ============================================================
+
+CATEGORIES = {
+
+    "Eletronicos": [
+        "Smartphones",
+        "Notebooks",
+        "Fones",
+        "Acessorios",
+        "Cameras"
+    ],
+
+    "Casa": [
+        "Moveis",
+        "Cozinha",
+        "Decoracao",
+        "Cama e Banho",
+        "Organizacao"
+    ],
+
+    "Moda": [
+        "Roupas",
+        "Calcados",
+        "Bolsas",
+        "Relogios",
+        "Acessorios"
+    ],
+
+    "Esportes": [
+        "Fitness",
+        "Camping",
+        "Ciclismo",
+        "Esportes",
+        "Outdoor"
+    ],
+
+    "Beleza": [
+        "Skincare",
+        "Maquiagem",
+        "Cabelos",
+        "Perfumes",
+        "Cuidados Pessoais"
+    ],
+
+    "Livros": [
+        "Literatura",
+        "Negocios",
+        "Tecnologia",
+        "Educacao",
+        "Infantil"
+    ]
+}
+
+categories = pd.DataFrame({
+
+    "category_id": range(
+        1,
+        len(CATEGORIES) + 1
+    ),
+
+    "category_name": list(
+        CATEGORIES.keys()
+    )
+
 })
 
 # ============================================================
-# 4. DIMENSION TABLE: PRODUCTS
+# 6. DIM_PRODUCTS
 # ============================================================
 
-product_ids = np.arange(1, N_PRODUCTS + 1)
+product_ids = np.arange(
+    1,
+    N_PRODUCTS + 1
+)
 
-product_categories = rng.choice(
-    list(categories.keys()),
-    size=N_PRODUCTS
+product_category_names = rng.choice(
+    list(CATEGORIES.keys()),
+    N_PRODUCTS
 )
 
 products = pd.DataFrame({
+
     "product_id": product_ids,
 
-    "category": product_categories,
+    "product_code": [
+        f"VG-PROD-{i:05d}"
+        for i in product_ids
+    ],
+
+    "product_name": [
+        f"Produto Vision {i:04d}"
+        for i in product_ids
+    ],
+
+    "category_name": product_category_names,
 
     "subcategory": [
-        rng.choice(categories[category])
-        for category in product_categories
-    ]
+        rng.choice(CATEGORIES[category])
+        for category in product_category_names
+    ],
+
+    "brand": rng.choice(
+        [
+            "Vision",
+            "Premium",
+            "TechPro",
+            "HomeStyle",
+            "SportMax",
+            "Basic"
+        ],
+        N_PRODUCTS
+    ),
+
+    "unit_cost": rng.uniform(
+        15,
+        300,
+        N_PRODUCTS
+    ).round(2)
+
+})
+
+products = products.merge(
+    categories,
+    on="category_name",
+    how="left"
+)
+
+# ============================================================
+# 7. DIM_SELLERS
+# ============================================================
+
+seller_ids = np.arange(
+    1,
+    N_SELLERS + 1
+)
+
+sellers = pd.DataFrame({
+
+    "seller_id": seller_ids,
+
+    "seller_name": [
+        f"Vendedor {i:03d}"
+        for i in seller_ids
+    ],
+
+    "commission_rate": rng.uniform(
+        0.01,
+        0.06,
+        N_SELLERS
+    ).round(4),
+
+    "seller_status": rng.choice(
+        ["Ativo", "Inativo"],
+        N_SELLERS,
+        p=[0.90, 0.10]
+    )
+
 })
 
 # ============================================================
-# 5. DIMENSION TABLE: COSTS
+# 8. DIM_STORES
 # ============================================================
 
-costs = pd.DataFrame({
-    "product_id": product_ids,
+store_ids = np.arange(
+    1,
+    N_STORES + 1
+)
 
-    "unit_cost": np.round(
-        rng.lognormal(
-            mean=3.0,
-            sigma=0.8,
-            size=N_PRODUCTS
-        ),
-        2
+stores = pd.DataFrame({
+
+    "store_id": store_ids,
+
+    "store_name": [
+        f"Loja Vision {i:02d}"
+        for i in store_ids
+    ],
+
+    "state": rng.choice(
+        STATES,
+        N_STORES
+    ),
+
+    "store_type": rng.choice(
+        [
+            "Loja Fisica",
+            "Centro de Distribuicao"
+        ],
+        N_STORES,
+        p=[0.85, 0.15]
     )
+
 })
 
-# ============================================================
-# 6. DETERMINE FACT TABLE SIZES
-# ============================================================
-
-FIXED_ROWS = (
-    len(customers)
-    + len(products)
-    + len(costs)
-    + len(geolocation)
+stores["region"] = (
+    stores["state"].map(STATE_REGION)
 )
 
-# Expected rows per order:
-# 1 order + 2.25 items + 1 payment + 0.10 return
-EXPECTED_ROWS_PER_ORDER = (
-    1 + 2.25 + 1 + RETURN_RATE
+stores["region_id"] = (
+    stores["region"].map({
+        "Norte": 1,
+        "Nordeste": 2,
+        "Centro-Oeste": 3,
+        "Sudeste": 4,
+        "Sul": 5
+    })
 )
 
-N_ORDERS = int(
-    (TOTAL_ROWS - FIXED_ROWS)
-    / EXPECTED_ROWS_PER_ORDER
+# ============================================================
+# 9. DIM_DATE
+# ============================================================
+
+date_range = pd.date_range(
+    START_DATE,
+    END_DATE,
+    freq="D"
 )
 
-# Recalculate until all tables fit the row budget.
-while True:
+dim_date = pd.DataFrame({
 
-    item_counts = rng.choice(
-        [1, 2, 3, 4],
-        size=N_ORDERS,
-        p=[0.20, 0.45, 0.25, 0.10]
-    )
+    "date": date_range
 
-    N_ITEMS = int(item_counts.sum())
+})
 
-    estimated_returns = int(
-        round(N_ORDERS * RETURN_RATE)
-    )
+dim_date["date_id"] = (
+    dim_date["date"]
+    .dt.strftime("%Y%m%d")
+    .astype(int)
+)
 
-    estimated_total = (
-        FIXED_ROWS
-        + N_ORDERS
-        + N_ITEMS
-        + N_ORDERS
-        + estimated_returns
-    )
+dim_date["year"] = (
+    dim_date["date"].dt.year
+)
 
-    if estimated_total <= TOTAL_ROWS:
-        break
+dim_date["month"] = (
+    dim_date["date"].dt.month
+)
 
-    reduction = max(
-        1,
-        int(np.ceil(
-            (estimated_total - TOTAL_ROWS) / 5
-        ))
-    )
+dim_date["day"] = (
+    dim_date["date"].dt.day
+)
 
-    N_ORDERS -= reduction
+dim_date["quarter"] = (
+    dim_date["date"].dt.quarter
+)
+
+dim_date["month_name"] = (
+    dim_date["date"].dt.month_name()
+)
+
+dim_date["year_month"] = (
+    dim_date["date"].dt.strftime("%Y-%m")
+)
+
+dim_date["day_of_week"] = (
+    dim_date["date"].dt.day_name()
+)
+
+dim_date["is_weekend"] = (
+    dim_date["date"].dt.dayofweek >= 5
+)
 
 # ============================================================
-# 7. FACT TABLE: ORDERS
+# 10. DICIONARIO DAS DIMENSOES
 # ============================================================
 
-order_ids = np.arange(1, N_ORDERS + 1)
+dimensions = {
 
-# Assign customers
+    "dim_customers": customers,
+
+    "dim_products": products,
+
+    "dim_categories": categories,
+
+    "dim_sellers": sellers,
+
+    "dim_stores": stores,
+
+    "dim_regions": regions,
+
+    "dim_date": dim_date
+
+}
+
+
+# ============================================================
+# 11. FACT_SALES - CRIACAO DOS PEDIDOS
+# ============================================================
+
+order_ids = np.arange(
+    1,
+    N_ORDERS + 1
+)
+
+# Gerar datas dentro do historico
+random_days = rng.integers(
+    0,
+    (END_DATE - START_DATE).days + 1,
+    N_ORDERS
+)
+
+random_order_dates = (
+    START_DATE
+    + pd.to_timedelta(random_days, unit="D")
+)
+
+# Distribuir clientes
 order_customer_ids = rng.integers(
     1,
     N_CUSTOMERS + 1,
-    size=N_ORDERS
+    N_ORDERS
 )
 
-# Generate order dates
-random_order_dates = (
-    START_DATE
-    + pd.to_timedelta(
-        rng.integers(
-            0,
-            (END_DATE - START_DATE).days + 1,
-            size=N_ORDERS
-        ),
-        unit="D"
-    )
-)
-
-# Ensure orders happen after customer registration
+# Garantir que a compra aconteca depois do cadastro
 signup_map = customers.set_index(
     "customer_id"
 )["signup_date"]
 
 assigned_signup_dates = (
-    signup_map.reindex(order_customer_ids)
+    pd.Series(order_customer_ids)
+    .map(signup_map)
     .reset_index(drop=True)
 )
 
-order_dates = pd.DatetimeIndex(
-    pd.concat(
-        [
-            pd.Series(random_order_dates),
-            assigned_signup_dates
-        ],
-        axis=1
-    ).max(axis=1)
+order_dates = pd.concat(
+    [
+        pd.Series(random_order_dates),
+        assigned_signup_dates
+    ],
+    axis=1
+).max(axis=1)
+
+order_dates = pd.to_datetime(order_dates)
+
+# Definir status dos pedidos
+order_statuses = rng.choice(
+    [
+        "Entregue",
+        "Enviado",
+        "Processando",
+        "Cancelado"
+    ],
+    N_ORDERS,
+    p=[0.82, 0.08, 0.06, 0.04]
 )
 
-# Order statuses
-statuses = rng.choice(
-    ORDER_STATUSES,
-    size=N_ORDERS,
-    p=[0.77, 0.10, 0.08, 0.05]
-)
-
-# Promised delivery: 3 to 10 days after order
-promised_delivery_dates = (
-    order_dates
-    + pd.to_timedelta(
-        rng.integers(3, 11, size=N_ORDERS),
-        unit="D"
-    )
-)
-
-# Actual delivery dates
+# Criar datas de entrega
 delivery_days = rng.integers(
     2,
     15,
-    size=N_ORDERS
+    N_ORDERS
 )
 
-actual_delivery_dates = (
+delivered_dates = (
     order_dates
     + pd.to_timedelta(delivery_days, unit="D")
 )
 
-# Only delivered and returned orders have delivery dates
 delivered_dates = pd.Series(
-    pd.NaT,
-    index=np.arange(N_ORDERS),
-    dtype="datetime64[ns]"
+    delivered_dates
 )
 
-delivered_mask = np.isin(
-    statuses,
-    ["Delivered"]
+delivered_dates.loc[
+    order_statuses != "Entregue"
+] = pd.NaT
+
+# Datas prometidas
+promised_delivery_dates = (
+    order_dates
+    + pd.to_timedelta(
+        rng.integers(3, 11, N_ORDERS),
+        unit="D"
+    )
 )
 
-delivered_dates.loc[delivered_mask] = (
-    actual_delivery_dates[delivered_mask]
-)
-
-# Cancellation dates
+# Datas de cancelamento
 canceled_dates = pd.Series(
     pd.NaT,
     index=np.arange(N_ORDERS),
     dtype="datetime64[ns]"
 )
 
-canceled_mask = statuses == "Canceled"
+canceled_mask = (
+    order_statuses == "Cancelado"
+)
 
 canceled_dates.loc[canceled_mask] = (
     order_dates[canceled_mask]
     + pd.to_timedelta(
         rng.integers(
-            0, 4,
-            size=canceled_mask.sum()
+            0,
+            4,
+            canceled_mask.sum()
         ),
         unit="D"
     )
 )
 
-orders = pd.DataFrame({
+# Criar tabela de pedidos
+sales = pd.DataFrame({
+
     "order_id": order_ids,
 
     "customer_id": order_customer_ids,
 
-    "order_date": order_dates,
+    "seller_id": rng.integers(
+        1,
+        N_SELLERS + 1,
+        N_ORDERS
+    ),
 
-    "status": statuses,
+    "store_id": rng.integers(
+        1,
+        N_STORES + 1,
+        N_ORDERS
+    ),
+
+    "order_date": order_dates,
 
     "promised_delivery_date": promised_delivery_dates,
 
-    "delivered_date": delivered_dates.to_numpy(),
+    "delivered_date": delivered_dates,
 
-    "canceled_at": canceled_dates.to_numpy(),
+    "canceled_at": canceled_dates,
 
-    # Operational shipping expense
-    "shipping_cost": np.round(
-        rng.uniform(
-            5,
-            50,
-            size=N_ORDERS
-        ),
-        2
-    ),
+    "status": order_statuses,
 
     "sales_channel": rng.choice(
-        SALES_CHANNELS,
-        size=N_ORDERS,
-        p=[0.40, 0.30, 0.20, 0.10]
-    )
+        [
+            "E-commerce",
+            "Aplicativo",
+            "Marketplace",
+            "Loja Fisica"
+        ],
+        N_ORDERS,
+        p=[0.35, 0.25, 0.20, 0.20]
+    ),
+
+    "shipping_cost": rng.uniform(
+        8,
+        45,
+        N_ORDERS
+    ).round(2)
+
 })
 
 # ============================================================
-# 8. FACT TABLE: ORDER ITEMS
+# 12. FACT_SALES_ITEMS - CRIACAO DOS ITENS
 # ============================================================
 
+# Quantidade de itens por pedido
+item_counts = rng.choice(
+    [1, 2, 3, 4],
+    N_ORDERS,
+    p=[0.20, 0.45, 0.25, 0.10]
+)
+
+# Repetir ID do pedido conforme quantidade de itens
 item_order_ids = np.repeat(
     order_ids,
     item_counts
 )
 
-actual_items = len(item_order_ids)
+N_ITEMS = len(item_order_ids)
 
+# Criar identificadores dos itens
+item_ids = np.arange(
+    1,
+    N_ITEMS + 1
+)
+
+# Quantidades
 quantities = rng.integers(
     1,
-    6,
-    size=actual_items
+    5,
+    N_ITEMS
 )
 
-prices = np.round(
-    rng.lognormal(
-        mean=3.3,
-        sigma=0.7,
-        size=actual_items
-    ),
-    2
+# Produtos vendidos
+item_product_ids = rng.integers(
+    1,
+    N_PRODUCTS + 1,
+    N_ITEMS
 )
 
-# Gross merchandise value before discounts
-gross_merchandise_value = (
-    quantities * prices
+# Precos originais
+unit_prices = rng.uniform(
+    30,
+    350,
+    N_ITEMS
 )
 
-# Discount rates
+# Descontos
 discount_rates = rng.choice(
-    [0.00, 0.05, 0.10, 0.15, 0.20, 0.30],
-    size=actual_items,
-    p=[0.45, 0.15, 0.15, 0.12, 0.08, 0.05]
-)
-
-discount_values = np.round(
-    gross_merchandise_value * discount_rates,
-    2
-)
-
-# Promotion IDs: NULL means no promotion
-promotion_ids = np.where(
-    discount_rates > 0,
-    rng.choice(
-        [
-            "PROMO-001",
-            "PROMO-002",
-            "PROMO-003",
-            "PROMO-004",
-            "PROMO-005"
-        ],
-        size=actual_items
-    ),
-    None
-)
-
-# Freight charged to customer per item
-freight = np.round(
-    rng.uniform(
-        2,
-        35,
-        size=actual_items
-    ),
-    2
-)
-
-order_items = pd.DataFrame({
-    "order_id": item_order_ids,
-
-    "product_id": rng.integers(
-        1,
-        N_PRODUCTS + 1,
-        size=actual_items
-    ),
-
-    "quantity": quantities,
-
-    "price": prices,
-
-    "freight": freight,
-
-    "discount": discount_values,
-
-    "promotion_id": promotion_ids
-})
-
-# ============================================================
-# 9. ENRICH ORDER ITEMS
-# ============================================================
-
-order_items = order_items.merge(
-    costs,
-    on="product_id",
-    how="left",
-    validate="many_to_one"
-)
-
-# Gross sales before discount and freight
-order_items["gross_merchandise_value"] = (
-    order_items["quantity"]
-    * order_items["price"]
-)
-
-# Discount amount
-order_items["discount"] = np.round(
-    order_items["discount"],
-    2
-)
-
-# Freight revenue
-order_items["freight_value"] = (
-    order_items["freight"]
-)
-
-# Net revenue after discount plus freight
-order_items["line_revenue"] = np.round(
-    order_items["gross_merchandise_value"]
-    - order_items["discount"]
-    + order_items["freight_value"],
-    2
-)
-
-# Product cost
-order_items["line_cost"] = np.round(
-    order_items["quantity"]
-    * order_items["unit_cost"],
-    2
-)
-
-# Final column organization
-order_items = order_items[
     [
-        "order_id",
-        "product_id",
-        "quantity",
-        "price",
-        "freight",
-        "unit_cost",
-        "gross_merchandise_value",
-        "discount",
-        "promotion_id",
-        "freight_value",
-        "line_revenue",
-        "line_cost"
+        0.00,
+        0.05,
+        0.10,
+        0.15,
+        0.20,
+        0.25
+    ],
+    N_ITEMS,
+    p=[
+        0.45,
+        0.18,
+        0.15,
+        0.12,
+        0.07,
+        0.03
     ]
-]
-
-# ============================================================
-# 10. FACT TABLE: PAYMENTS
-# ============================================================
-
-order_totals = (
-    order_items
-    .groupby("order_id")["line_revenue"]
-    .sum()
 )
 
-payment_values = (
-    order_totals
-    .reindex(order_ids)
+# Valor bruto
+gross_revenue = (
+    quantities * unit_prices
+)
+
+# Valor do desconto
+discount_value = (
+    gross_revenue * discount_rates
+)
+
+# ============================================================
+# 13. IDENTIFICAR PEDIDOS CANCELADOS
+# ============================================================
+
+item_status_map = sales.set_index(
+    "order_id"
+)["status"]
+
+item_status = (
+    pd.Series(item_order_ids)
+    .map(item_status_map)
     .to_numpy()
 )
 
-# Canceled orders have no completed payment
-payment_values[canceled_mask] = 0
+item_canceled_mask = (
+    item_status == "Cancelado"
+)
 
-payments = pd.DataFrame({
-    "order_id": order_ids,
+item_eligible_mask = (
+    ~item_canceled_mask
+)
 
-    "payment_value": np.round(
-        payment_values,
+# ============================================================
+# 14. CALIBRACAO DA RECEITA
+# ============================================================
+
+# Receita antes da calibracao
+initial_net_revenue = (
+    gross_revenue - discount_value
+)
+
+# Considerar somente itens de pedidos nao cancelados
+eligible_revenue = initial_net_revenue[
+    item_eligible_mask
+].sum()
+
+# Fator de ajuste para atingir R$ 8,2 milhoes
+revenue_factor = (
+    TARGET_REVENUE / eligible_revenue
+)
+
+# Ajustar preco unitario
+unit_prices = (
+    unit_prices * revenue_factor
+)
+
+# Recalcular valores comerciais
+gross_revenue = (
+    quantities * unit_prices
+).round(2)
+
+discount_value = (
+    gross_revenue * discount_rates
+).round(2)
+
+net_revenue = (
+    gross_revenue - discount_value
+).round(2)
+
+# Corrigir diferenca de arredondamento
+revenue_difference = round(
+    TARGET_REVENUE
+    - net_revenue[item_eligible_mask].sum(),
+    2
+)
+
+# Ajustar o ultimo item elegivel
+last_eligible_index = np.flatnonzero(
+    item_eligible_mask
+)[-1]
+
+gross_revenue[last_eligible_index] += (
+    revenue_difference
+)
+
+net_revenue[last_eligible_index] += (
+    revenue_difference
+)
+
+# ============================================================
+# 15. CALIBRACAO DOS CUSTOS
+# ============================================================
+
+product_cost_map = products.set_index(
+    "product_id"
+)["unit_cost"]
+
+original_unit_costs = (
+    pd.Series(item_product_ids)
+    .map(product_cost_map)
+    .to_numpy()
+)
+
+initial_line_cost = (
+    quantities * original_unit_costs
+)
+
+# Considerar somente pedidos nao cancelados
+eligible_cost = initial_line_cost[
+    item_eligible_mask
+].sum()
+
+# Fator para atingir o custo desejado
+cost_factor = (
+    TARGET_COST / eligible_cost
+)
+
+# Ajustar custo unitario
+adjusted_unit_costs = (
+    original_unit_costs * cost_factor
+)
+
+# Recalcular custo por item
+line_cost = (
+    quantities * adjusted_unit_costs
+).round(2)
+
+# Corrigir diferenca de arredondamento
+cost_difference = round(
+    TARGET_COST
+    - line_cost[item_eligible_mask].sum(),
+    2
+)
+
+line_cost[last_eligible_index] += (
+    cost_difference
+)
+
+# ============================================================
+# 16. ZERAR VALORES DOS PEDIDOS CANCELADOS
+# ============================================================
+
+gross_revenue[item_canceled_mask] = 0.00
+
+discount_value[item_canceled_mask] = 0.00
+
+net_revenue[item_canceled_mask] = 0.00
+
+line_cost[item_canceled_mask] = 0.00
+
+# Lucro bruto por item
+gross_profit = (
+    net_revenue - line_cost
+).round(2)
+
+# Margem por item
+gross_margin = np.divide(
+    gross_profit,
+    net_revenue,
+    out=np.zeros(N_ITEMS),
+    where=net_revenue != 0
+)
+
+# ============================================================
+# 17. CRIAR TABELA FACT_SALES_ITEMS
+# ============================================================
+
+items = pd.DataFrame({
+
+    "item_id": item_ids,
+
+    "order_id": item_order_ids,
+
+    "product_id": item_product_ids,
+
+    "quantity": quantities,
+
+    "unit_price": np.round(
+        unit_prices,
         2
-    )
+    ),
+
+    "unit_cost": np.round(
+        adjusted_unit_costs,
+        2
+    ),
+
+    "discount_rate": discount_rates,
+
+    "gross_revenue": gross_revenue,
+
+    "discount_value": discount_value,
+
+    "net_revenue": net_revenue,
+
+    "line_cost": line_cost,
+
+    "gross_profit": gross_profit,
+
+    "gross_margin": gross_margin,
+
+    "promotion_id": np.where(
+        discount_rates > 0,
+        rng.choice(
+            [
+                "PROMO-001",
+                "PROMO-002",
+                "PROMO-003",
+                "PROMO-004",
+                "PROMO-005"
+            ],
+            N_ITEMS
+        ),
+        None
+    ),
+
+    "status": item_status
+
 })
 
 # ============================================================
-# 11. FACT TABLE: RETURNS
+# 18. CONSOLIDAR VALORES POR PEDIDO
 # ============================================================
 
-eligible_orders = orders.loc[
-    orders["status"] == "Delivered",
+order_totals = (
+    items.groupby("order_id")
+    .agg(
+
+        order_gross_revenue=(
+            "gross_revenue",
+            "sum"
+        ),
+
+        order_discount=(
+            "discount_value",
+            "sum"
+        ),
+
+        order_revenue=(
+            "net_revenue",
+            "sum"
+        ),
+
+        order_cost=(
+            "line_cost",
+            "sum"
+        ),
+
+        order_profit=(
+            "gross_profit",
+            "sum"
+        )
+
+    )
+    .reset_index()
+)
+
+# Associar os valores a fact_sales
+sales = sales.merge(
+    order_totals,
+    on="order_id",
+    how="left"
+)
+
+# ============================================================
+# 19. CAMPOS FINANCEIROS DOS PEDIDOS
+# ============================================================
+
+sales["order_margin"] = np.divide(
+    sales["order_profit"],
+    sales["order_revenue"],
+    out=np.zeros(len(sales)),
+    where=sales["order_revenue"].to_numpy() != 0
+)
+
+# ============================================================
+# 20. RESULTADO DA PARTE 2
+# ============================================================
+
+# As tabelas comerciais estao prontas.
+# A receita foi distribuida somente entre pedidos
+# nao cancelados.
+
+facts_commercial = {
+
+    "fact_sales": sales,
+
+    "fact_sales_items": items
+
+}
+
+
+# ============================================================
+# 21. FACT_RETURNS E FACT_RETURNS_ITEMS
+# ============================================================
+
+# Considerar somente pedidos entregues
+delivered_orders = sales.loc[
+    sales["status"] == "Entregue",
     "order_id"
 ].to_numpy()
 
-N_RETURNS = min(
-    int(round(N_ORDERS * RETURN_RATE)),
-    len(eligible_orders)
+# Percentual de pedidos devolvidos
+RETURN_RATE = 0.08
+
+N_RETURNS = int(
+    len(delivered_orders) * RETURN_RATE
 )
 
+# Selecionar pedidos que terao devolucao
 returned_order_ids = rng.choice(
-    eligible_orders,
+    delivered_orders,
     size=N_RETURNS,
     replace=False
 )
 
-# Aggregate purchased quantities by order
-order_quantities = (
-    order_items
-    .groupby("order_id")["quantity"]
-    .sum()
+# Motivos de devolucao
+RETURN_REASONS = [
+    "Produto danificado",
+    "Produto incorreto",
+    "Insatisfacao do cliente",
+    "Atraso na entrega",
+    "Defeito do produto"
+]
+
+# Criar identificadores
+return_ids = np.arange(
+    1,
+    N_RETURNS + 1
 )
 
-# Maps
-payment_map = payments.set_index(
-    "order_id"
-)["payment_value"]
+return_records = []
 
-delivery_date_map = orders.set_index(
-    "order_id"
-)["delivered_date"]
+return_item_records = []
 
-# Generate returned quantities
-returned_quantities = []
+return_item_id = 1
 
-for order_id in returned_order_ids:
+# Criar devolucoes por pedido e produto
+for return_id, order_id in zip(
+    return_ids,
+    returned_order_ids
+):
 
-    purchased_quantity = int(
-        order_quantities.loc[order_id]
+    # Itens pertencentes ao pedido
+    order_items = items.loc[
+        items["order_id"] == order_id
+    ].copy()
+
+    # Quantidade de produtos que serao devolvidos
+    number_of_returned_products = rng.integers(
+        1,
+        len(order_items) + 1
     )
 
-    returned_quantities.append(
-        int(
+    selected_items = order_items.sample(
+        n=number_of_returned_products,
+        random_state=int(
+            rng.integers(0, 2**31 - 1)
+        )
+    )
+
+    # Data da entrega
+    delivery_date = sales.loc[
+        sales["order_id"] == order_id,
+        "delivered_date"
+    ].iloc[0]
+
+    # Data da devolucao
+    return_date = (
+        delivery_date
+        + pd.Timedelta(
+            days=int(rng.integers(1, 31))
+        )
+    )
+
+    # Motivo
+    reason = rng.choice(
+        RETURN_REASONS,
+        p=[0.25, 0.15, 0.25, 0.15, 0.20]
+    )
+
+    # Status
+    return_status = rng.choice(
+        ["Aprovada", "Em processamento"],
+        p=[0.85, 0.15]
+    )
+
+    total_refund = 0.00
+
+    # Criar os itens da devolucao
+    for _, item in selected_items.iterrows():
+
+        purchased_quantity = int(
+            item["quantity"]
+        )
+
+        # Quantidade devolvida
+        returned_quantity = int(
             rng.integers(
                 1,
                 purchased_quantity + 1
             )
         )
-    )
 
-returned_quantities = np.array(
-    returned_quantities
+        # Valor proporcional do produto
+        original_item_value = (
+            float(item["net_revenue"])
+            * returned_quantity
+            / purchased_quantity
+        )
+
+        # Reembolso integral ou parcial
+        refund_percentage = float(
+            rng.uniform(0.70, 1.00)
+        )
+
+        if return_status == "Aprovada":
+
+            refund_value = round(
+                original_item_value
+                * refund_percentage,
+                2
+            )
+
+        else:
+
+            refund_value = 0.00
+
+        total_refund += refund_value
+
+        return_item_records.append({
+
+            "return_item_id": return_item_id,
+
+            "return_id": return_id,
+
+            "order_id": order_id,
+
+            "product_id": int(
+                item["product_id"]
+            ),
+
+            "original_item_id": int(
+                item["item_id"]
+            ),
+
+            "returned_quantity": returned_quantity,
+
+            "original_quantity": purchased_quantity,
+
+            "original_item_revenue": round(
+                original_item_value,
+                2
+            ),
+
+            "refund_percentage": round(
+                refund_percentage,
+                4
+            ),
+
+            "refund_value": refund_value
+
+        })
+
+        return_item_id += 1
+
+    # Criar registro principal da devolucao
+    return_records.append({
+
+        "return_id": return_id,
+
+        "order_id": order_id,
+
+        "return_date": return_date,
+
+        "return_reason": reason,
+
+        "return_status": return_status,
+
+        "refund_value": round(
+            total_refund,
+            2
+        )
+
+    })
+
+# Tabela principal de devolucoes
+returns = pd.DataFrame(
+    return_records
 )
 
-# Generate return dates after delivery
-return_dates = []
+# Tabela de itens devolvidos
+returns_items = pd.DataFrame(
+    return_item_records
+)
 
-for order_id in returned_order_ids:
+# ============================================================
+# 22. FACT_INVENTORY - ESTOQUE
+# ============================================================
 
-    base_date = delivery_date_map.loc[order_id]
+# Periodicidade mensal
+inventory_months = pd.date_range(
+    START_DATE,
+    END_DATE,
+    freq="MS"
+)
 
-    return_dates.append(
-        base_date
-        + pd.Timedelta(
-            days=int(rng.integers(1, 61))
-        )
+# Criar combinacoes de mes, produto e loja
+inventory_index = pd.MultiIndex.from_product(
+    [
+        inventory_months,
+        product_ids,
+        store_ids
+    ],
+    names=[
+        "inventory_date",
+        "product_id",
+        "store_id"
+    ]
+)
+
+inventory = inventory_index.to_frame(
+    index=False
+)
+
+# Quantidade em estoque
+inventory["stock_quantity"] = rng.integers(
+    0,
+    301,
+    len(inventory)
+)
+
+# Ponto de reposicao
+inventory["reorder_point"] = rng.integers(
+    10,
+    50,
+    len(inventory)
+)
+
+# Custo unitario dos produtos
+inventory["unit_cost"] = (
+    inventory["product_id"]
+    .map(
+        products.set_index(
+            "product_id"
+        )["unit_cost"]
     )
+)
 
-# Calculate refunds proportionally to returned quantity
-refund_values = []
+# Valor total do estoque
+inventory["stock_value"] = (
+    inventory["stock_quantity"]
+    * inventory["unit_cost"]
+).round(2)
 
-for order_id, returned_quantity in zip(
-    returned_order_ids,
-    returned_quantities
-):
+# Status do estoque
+inventory["stock_status"] = np.select(
+    [
+        inventory["stock_quantity"] == 0,
 
-    purchased_quantity = int(
-        order_quantities.loc[order_id]
-    )
+        inventory["stock_quantity"]
+        <= inventory["reorder_point"]
+    ],
+    [
+        "Ruptura",
+        "Estoque Baixo"
+    ],
+    default="Normal"
+)
 
-    payment_value = float(
-        payment_map.loc[order_id]
-    )
+# ============================================================
+# 23. FACT_MARKETING - CAMPANHAS
+# ============================================================
 
-    refund = (
-        payment_value
-        * (returned_quantity / purchased_quantity)
-        * rng.uniform(0.70, 1.00)
-    )
+N_CAMPAIGNS = 300
 
-    refund_values.append(
-        round(refund, 2)
-    )
+marketing = pd.DataFrame({
 
-returns = pd.DataFrame({
-    "order_id": returned_order_ids,
-
-    "return_date": return_dates,
-
-    "refund_value": refund_values,
-
-    "return_reason": rng.choice(
-        RETURN_REASONS,
-        size=N_RETURNS,
-        p=[0.25, 0.15, 0.25, 0.15, 0.20]
+    "campaign_id": np.arange(
+        1,
+        N_CAMPAIGNS + 1
     ),
 
-    "return_status": rng.choice(
-        ["Approved", "Processing"],
-        size=N_RETURNS,
-        p=[0.85, 0.15]
+    "campaign_name": [
+        f"Campanha Vision {i:03d}"
+        for i in range(1, N_CAMPAIGNS + 1)
+    ],
+
+    "campaign_date": rng.choice(
+        inventory_months,
+        N_CAMPAIGNS
     ),
 
-    "returned_quantity": returned_quantities
+    "channel": rng.choice(
+        [
+            "Google Ads",
+            "Meta Ads",
+            "Email Marketing",
+            "Afiliados",
+            "Influenciadores"
+        ],
+        N_CAMPAIGNS
+    ),
+
+    "campaign_cost": rng.uniform(
+        500,
+        15000,
+        N_CAMPAIGNS
+    ).round(2),
+
+    "impressions": rng.integers(
+        10000,
+        500000,
+        N_CAMPAIGNS
+    ),
+
+    "clicks": rng.integers(
+        500,
+        30000,
+        N_CAMPAIGNS
+    ),
+
+    "conversions": rng.integers(
+        10,
+        1500,
+        N_CAMPAIGNS
+    )
+
 })
 
+# Receita atribuida as campanhas
+marketing["attributed_revenue"] = (
+    marketing["campaign_cost"]
+    * rng.uniform(
+        2,
+        8,
+        N_CAMPAIGNS
+    )
+).round(2)
+
+# Retorno sobre investimento em anuncios
+marketing["roas"] = (
+    marketing["attributed_revenue"]
+    / marketing["campaign_cost"]
+).round(2)
+
 # ============================================================
-# 12. SYNCHRONIZE RETURNS WITH ORDER STATUS
+# 24. FACT_FINANCIAL - FINANCEIRO
 # ============================================================
 
-returned_mask = orders["order_id"].isin(
-    returns["order_id"]
+# Receita mensal a partir dos pedidos
+monthly_revenue = (
+    sales.groupby(
+        sales["order_date"].dt.to_period("M")
+    )["order_revenue"]
+    .sum()
 )
 
-orders.loc[
-    returned_mask,
-    "status"
-] = "Returned"
+financial = monthly_revenue.rename(
+    "revenue"
+).reset_index()
+
+financial["month"] = (
+    financial["order_date"]
+    .dt.to_timestamp()
+)
+
+financial = financial.drop(
+    columns="order_date"
+)
+
+# Despesas operacionais
+financial["operating_expenses"] = (
+    financial["revenue"]
+    * rng.uniform(
+        0.08,
+        0.18,
+        len(financial)
+    )
+).round(2)
+
+# Despesas administrativas
+financial["administrative_expenses"] = (
+    financial["revenue"]
+    * rng.uniform(
+        0.02,
+        0.06,
+        len(financial)
+    )
+).round(2)
+
+# Despesas comerciais
+financial["commercial_expenses"] = (
+    financial["revenue"]
+    * rng.uniform(
+        0.02,
+        0.05,
+        len(financial)
+    )
+).round(2)
+
+# Depreciacao e amortizacao
+financial["depreciation_amortization"] = (
+    financial["revenue"] * 0.02
+).round(2)
+
+# EBITDA
+financial["ebitda"] = (
+    financial["revenue"]
+    - financial["operating_expenses"]
+    - financial["administrative_expenses"]
+    - financial["commercial_expenses"]
+)
+
+# Entradas financeiras
+financial["cash_inflow"] = (
+    financial["revenue"]
+    * rng.uniform(
+        0.90,
+        1.00,
+        len(financial)
+    )
+).round(2)
+
+# Saidas financeiras
+financial["cash_outflow"] = (
+    financial["operating_expenses"]
+    + financial["administrative_expenses"]
+    + financial["commercial_expenses"]
+    + financial["depreciation_amortization"]
+).round(2)
+
+# Fluxo de caixa
+financial["cash_flow"] = (
+    financial["cash_inflow"]
+    - financial["cash_outflow"]
+).round(2)
 
 # ============================================================
-# 13. DATE FORMATTING
+# 25. FACT_TARGETS - METAS
 # ============================================================
 
-date_columns = {
-    "customers": [
-        "signup_date"
-    ],
-    "orders": [
-        "order_date",
-        "promised_delivery_date",
-        "delivered_date",
-        "canceled_at"
-    ],
-    "returns": [
-        "return_date"
-    ]
+targets = financial[["month"]].copy()
+
+# Metas mensais iniciais
+targets["revenue_target"] = (
+    TARGET_REVENUE / len(targets)
+)
+
+targets["profit_target"] = (
+    TARGET_PROFIT / len(targets)
+)
+
+targets["orders_target"] = (
+    N_ORDERS / len(targets)
+)
+
+targets["margin_target"] = (
+    TARGET_PROFIT / TARGET_REVENUE
+)
+
+# ============================================================
+# 26. ORGANIZAR TODAS AS TABELAS
+# ============================================================
+
+facts = {
+
+    "fact_sales": sales,
+
+    "fact_sales_items": items,
+
+    "fact_returns": returns,
+
+    "fact_returns_items": returns_items,
+
+    "fact_inventory": inventory,
+
+    "fact_marketing": marketing,
+
+    "fact_financial": financial,
+
+    "fact_targets": targets
+
 }
 
-for table_name, columns in date_columns.items():
-
-    dataframe = {
-        "customers": customers,
-        "orders": orders,
-        "returns": returns
-    }[table_name]
-
-    for column in columns:
-
-        dataframe[column] = pd.to_datetime(
-            dataframe[column]
-        ).dt.strftime("%Y-%m-%d")
-
 # ============================================================
-# 14. EXPORT CSV FILES
+# 27. EXPORTAR DIMENSOES E FATOS PARA CSV
 # ============================================================
 
-tables = {
-    "customers": customers,
-    "products": products,
-    "costs": costs,
-    "orders": orders,
-    "order_items": order_items,
-    "payments": payments,
-    "returns": returns,
-    "geolocation": geolocation
+all_tables = {
+
+    **dimensions,
+
+    **facts
+
 }
 
-for table_name, dataframe in tables.items():
+for table_name, dataframe in all_tables.items():
 
     file_path = os.path.join(
-        OUTPUT_DIR,
+        RAW_DIR,
         f"{table_name}.csv"
     )
 
     dataframe.to_csv(
         file_path,
-        index=False
+        index=False,
+        encoding="utf-8-sig",
+        date_format="%Y-%m-%d"
     )
+
+# ============================================================
+# 28. FINALIZACAO
+# ============================================================
+
+print("\n" + "=" * 60)
+
+print("VISION GROUP - DATASET GERADO")
+
+print("=" * 60)
+
+print(f"Empresa: {COMPANY}")
+
+print(f"Clientes: {N_CUSTOMERS:,}")
+
+print(f"Pedidos: {N_ORDERS:,}")
+
+print(f"Produtos: {N_PRODUCTS:,}")
+
+print(f"Vendedores: {N_SELLERS:,}")
+
+print(f"Lojas: {N_STORES:,}")
+
+print(f"Receita comercial definida: R$ {TARGET_REVENUE:,.2f}")
+
+print(f"Lucro bruto definido: R$ {TARGET_PROFIT:,.2f}")
+
+print(f"Margem bruta definida: {TARGET_PROFIT / TARGET_REVENUE:.2%}")
+
+print(f"Pedidos com devolucao: {N_RETURNS:,}")
+
+print(f"Itens devolvidos: {len(returns_items):,}")
+
+print("\nTABELAS GERADAS")
+
+for name, dataframe in all_tables.items():
 
     print(
-        f"{table_name}.csv: "
-        f"{len(dataframe):,} rows"
+        f"{name:<25} {len(dataframe):>12,} registros"
     )
 
-# ============================================================
-# 15. SUMMARY
-# ============================================================
+print("\nArquivos salvos em:")
 
-total_generated = sum(
-    len(df)
-    for df in tables.values()
-)
+print(os.path.abspath(RAW_DIR))
 
-print("\n" + "=" * 55)
-print("DATASET GENERATION COMPLETED")
-print("=" * 55)
-
-print(
-    f"Total rows generated: "
-    f"{total_generated:,}"
-)
-
-print(
-    f"Maximum row budget: "
-    f"{TOTAL_ROWS:,}"
-)
-
-print(
-    f"Utilization: "
-    f"{total_generated / TOTAL_ROWS:.2%}"
-)
-
-print(
-    f"Output directory: "
-    f"{OUTPUT_DIR}"
-)
-
-print("\nTable sizes:")
-
-for name, df in tables.items():
-
-    print(
-        f"{name:<15}: {len(df):>10,}"
-    )
-
-# ============================================================
-# 16. VALIDATIONS
-# ============================================================
-
-# Primary keys
-assert orders["order_id"].is_unique
-assert customers["customer_id"].is_unique
-assert customers["customer_unique_id"].is_unique
-assert products["product_id"].is_unique
-assert costs["product_id"].is_unique
-assert payments["order_id"].is_unique
-assert returns["order_id"].is_unique
-assert geolocation["state"].is_unique
-
-# Foreign keys
-assert orders["customer_id"].isin(
-    customers["customer_id"]
-).all()
-
-assert order_items["order_id"].isin(
-    orders["order_id"]
-).all()
-
-assert order_items["product_id"].isin(
-    products["product_id"]
-).all()
-
-assert payments["order_id"].isin(
-    orders["order_id"]
-).all()
-
-assert returns["order_id"].isin(
-    orders["order_id"]
-).all()
-
-assert costs["product_id"].isin(
-    products["product_id"]
-).all()
-
-# Geographic relationships
-assert customers["state"].isin(
-    geolocation["state"]
-).all()
-
-# Date consistency
-order_dates_check = pd.to_datetime(
-    orders["order_date"]
-)
-
-signup_dates_check = pd.to_datetime(
-    orders["customer_id"].map(
-        customers.set_index("customer_id")["signup_date"]
-    )
-)
-
-assert (
-    order_dates_check >= signup_dates_check
-).all()
-
-assert (
-    pd.to_datetime(
-        orders["promised_delivery_date"]
-    ) >= order_dates_check
-).all()
-
-assert (
-    orders.loc[
-        orders["status"] == "Canceled",
-        "canceled_at"
-    ].notna()
-).all()
-
-assert (
-    orders.loc[
-        orders["status"] == "Canceled",
-        "delivered_date"
-    ].isna()
-).all()
-
-assert (
-    orders.loc[
-        orders["status"].isin(["Delivered", "Returned"]),
-        "delivered_date"
-    ].notna()
-).all()
-
-assert (
-    pd.to_datetime(
-        returns["return_date"]
-    ).to_numpy()
-    >= pd.to_datetime(
-        returns["order_id"].map(
-            orders.set_index("order_id")["delivered_date"]
-        )
-    ).to_numpy()
-).all()
-
-# Return consistency
-returned_orders = set(
-    orders.loc[
-        orders["status"] == "Returned",
-        "order_id"
-    ]
-)
-
-assert returned_orders == set(
-    returns["order_id"]
-)
-
-# Returned quantity cannot exceed purchased quantity
-assert (
-    returns["returned_quantity"].to_numpy()
-    <= returns["order_id"].map(
-        order_quantities
-    ).to_numpy()
-).all()
-
-# Financial consistency
-assert (
-    order_items["discount"] >= 0
-).all()
-
-assert (
-    order_items["discount"]
-    <= order_items["gross_merchandise_value"]
-).all()
-
-assert (
-    order_items["line_revenue"] >= 0
-).all()
-
-assert (
-    order_items["line_cost"] >= 0
-).all()
-
-assert (
-    order_items["line_revenue"]
-    == (
-        order_items["gross_merchandise_value"]
-        - order_items["discount"]
-        + order_items["freight_value"]
-    ).round(2)
-).all()
-
-payment_lookup = payments.set_index(
-    "order_id"
-)["payment_value"]
-
-assert (
-    returns["refund_value"].to_numpy()
-    <= returns["order_id"].map(
-        payment_lookup
-    ).to_numpy()
-).all()
-
-# Promotion consistency
-assert (
-    order_items.loc[
-        order_items["discount"] == 0,
-        "promotion_id"
-    ].isna()
-).all()
-
-assert (
-    order_items.loc[
-        order_items["discount"] > 0,
-        "promotion_id"
-    ].notna()
-).all()
-
-# Dataset budget
-assert total_generated <= TOTAL_ROWS
-
-# Required geographic coverage
-assert set(geolocation["state"]) == set(STATES)
-
-print("\nAll validation checks passed successfully!")
+print("\nGERACAO CONCLUIDA!")
